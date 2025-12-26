@@ -243,6 +243,20 @@ export async function getPokemonFromImportable(importable, options) {
   }
 }
 
+//parse multiple importables (separated by one or more blank lines)
+export async function getPokemonFromImportables(importables, options) {
+  const chunks = importables
+    .split(/\n\s*\n+/)
+    .map((c) => c.trim())
+    .filter((c) => c.length > 0);
+  const pokemonList = [];
+  for (const chunk of chunks) {
+    const p = await getPokemonFromImportable(chunk, options);
+    if (p != null) pokemonList.push(p);
+  }
+  return pokemonList;
+}
+
 //function that parses the species from the first line of the importable
 export function getSpeciesName(speciesString) {
   var species = speciesString;
@@ -339,6 +353,52 @@ export async function convertBBCodeToList(data, speedStageConversionTable) {
   } catch (error) {
     console.log(error);
     return null;
+  }
+}
+
+//export list in various formats: 'bbcode', 'json', 'csv'
+export async function exportList(pokemonList, format, speedStageConversionTable) {
+  const list = pokemonList.slice();
+  switch (format) {
+    case "bbcode":
+      return await generateOutput(list, speedStageConversionTable, "en");
+    case "json": {
+      const out = list.map((p) => ({
+        name: p.name,
+        baseSpeed: p.baseSpeed,
+        calculatedSpeed: p.calculatedSpeed,
+        iv: p.iv,
+        ev: p.ev,
+        level: p.level,
+        nature: parseFloat(p.nature) === 1.1 ? "Positive" : parseFloat(p.nature) === 1 ? "Neutral" : "Negative",
+        speedStage: speedStageConversionTable[p.speedStage] ?? p.speedStage,
+      }));
+      return JSON.stringify(out, null, 2);
+    }
+    case "csv": {
+      const headers = [
+        "calculatedSpeed",
+        "name",
+        "baseSpeed",
+        "nature",
+        "iv",
+        "ev",
+        "level",
+        "speedStage",
+      ];
+      const rows = [headers.join(",")];
+      for (const p of list) {
+        const nature = parseFloat(p.nature) === 1.1 ? "Positive" : parseFloat(p.nature) === 1 ? "Neutral" : "Negative";
+        const speedStage = speedStageConversionTable[p.speedStage] ?? p.speedStage;
+        const vals = [p.calculatedSpeed, p.name, p.baseSpeed, nature, p.iv, p.ev, p.level, speedStage];
+        // escape commas in name
+        const escaped = vals.map((v) => (typeof v === "string" && v.includes(",") ? `"${v.replace(/"/g, '""')}"` : v));
+        rows.push(escaped.join(","));
+      }
+      return rows.join("\n");
+    }
+    default:
+      return "";
   }
 }
 
